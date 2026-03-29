@@ -170,10 +170,10 @@ COMMAND_TABLE = {
 # LR20xx status flags 
 # --------------------------------------------------------------------------- #
 STATUS_TABLE = {
-    0x00: 'FAIL(0)',
-    0x01: 'PERR(1)',
-    0x02: 'OK(2)',
-    0x03: 'DATA(3)',
+    0x00: 'FAIL',
+    0x01: 'PERR',
+    0x02: 'OK',
+    0x03: 'DATA',
 }
 
 STATUS_FRAME_TYPE = {
@@ -184,19 +184,19 @@ STATUS_FRAME_TYPE = {
 }
 
 MODE_TABLE = {
-    0x00: 'SLEEP(0)',
-    0x01: 'STDBY_RC(1)',
-    0x02: 'STDBY_XOSC(2)',
-    0x03: 'FS(3)',
-    0x04: 'RX(4)',
-    0x05: 'TX(5)',
+    0x00: 'SLEEP',
+    0x01: 'STDBY_RC',
+    0x02: 'STDBY_XOSC',
+    0x03: 'FS',
+    0x04: 'RX',
+    0x05: 'TX',
 }
 
 RESET_SRC_TABLE = {
     0x00: '',
-    0x01: '| RST: Analog(1)',
-    0x02: '| RST: NRESET(2)',
-    0x03: '| RST: RFU(3)',
+    0x01: 'Analog',
+    0x02: 'NRESET',
+    0x03: 'RFU',
 }
 
 def _lookup(table, value):
@@ -219,9 +219,10 @@ class Hla(HighLevelAnalyzer):
     """
 
     # Settings:
-    enable_int_stat = ChoicesSetting(label='Enable Interrupt Status', choices=['Enable', 'Disable'])
-    enable_reset_src = ChoicesSetting(label='Enable Reset Source', choices=['Enable', 'Disable'])
-    enable_mode_src = ChoicesSetting(label='Enable Mode Source', choices=['Enable', 'Disable'])
+    enable_status_info = ChoicesSetting(label='Enable Status Info', choices=['Enable', 'Disable'])
+    enable_mode_info = ChoicesSetting(label='Enable Mode Info', choices=['Enable', 'Disable'])
+    enable_int_stat = ChoicesSetting(label='Enable Interrupt Status', choices=['Disable', 'Enable'])
+    enable_reset_info = ChoicesSetting(label='Enable Reset Info', choices=['Disable', 'Enable'])
 
     # ── Result frame types shown in the Logic 2 UI ──────────────────────── #
     # Each type gets its own colour in Logic 2.
@@ -250,7 +251,6 @@ class Hla(HighLevelAnalyzer):
     def __init__(self):
         """Initialise per-transaction accumulators."""
         self._reset()
-
 
     def _reset(self):
         """Clear the running transaction state."""
@@ -331,6 +331,7 @@ class Hla(HighLevelAnalyzer):
         command_key = (self.mosi_bytes[0], self.mosi_bytes[1])
         status_byte_0 = self.miso_bytes[0] if self.miso_bytes else 0x00
         status_byte_1 = self.miso_bytes[1] if len(self.miso_bytes) > 1 else 0x00
+        
 
         command_status = status_byte_0 >> 1 & 3
         mode = status_byte_1 & 0x07
@@ -342,9 +343,20 @@ class Hla(HighLevelAnalyzer):
         command_status_str = _lookup(STATUS_TABLE, command_status)
         mode_str = _lookup(MODE_TABLE, mode)
         reset_src_str = _lookup(RESET_SRC_TABLE, reset_src)
-        interrupt_str = '| INT_ACTIVE' if interrupt else ''
 
-        result = f'CMD: {command_str} | STAT: {command_status_str} | MODE: {mode_str} {interrupt_str} {reset_src_str}'
+        result = f'CMD: {command_str}'
+
+        if self.enable_status_info == 'Enable':
+            result += f' | CMD STAT: {command_status_str}'
+
+        if self.enable_mode_info == 'Enable':
+            result += f' | MODE: {mode_str}'
+
+        if self.enable_int_stat == 'Enable' and interrupt:
+            result += ' | INT'
+
+        if self.enable_reset_info == 'Enable' and reset_src_str != '':
+            result += f' | RST: {reset_src_str}'
 
         return AnalyzerFrame(
             frame_type,
