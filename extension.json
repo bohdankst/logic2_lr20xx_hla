@@ -1,0 +1,13 @@
+{
+  "name": "lr20xx",
+  "apiVersion": "1.0.0",
+  "author": "Bohdan Kostiv",
+  "version": "0.0.1",
+  "description": "Semtech LR20xx series LoRa transceiver high-level protocol analyzer extension",
+  "extensions": {
+    "lr20xx": {
+      "type": "HighLevelAnalyzer",
+      "entryPoint": "HighLevelAnalyzer.Hla"
+    }
+  }
+}
