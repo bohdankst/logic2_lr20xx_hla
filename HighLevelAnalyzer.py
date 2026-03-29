@@ -163,7 +163,7 @@ COMMAND_TABLE = {
         (0x01, 0x04): 'REGMEM_WRITE_REGMEM32_OC',
         (0x01, 0x05): 'REGMEM_WRITE_REGMEM32_MASK_OC',
         (0x01, 0x06): 'REGMEM_READ_REGMEM32_OC',
-        (0x00, 0x00): 'NONE (READ)',
+        (0x00, 0x00): 'NONE (CMD Continue)',
 }
 
 # --------------------------------------------------------------------------- #
@@ -227,24 +227,12 @@ class Hla(HighLevelAnalyzer):
     # ── Result frame types shown in the Logic 2 UI ──────────────────────── #
     # Each type gets its own colour in Logic 2.
     result_types = {
-        'lr20xx_fail': {
-            'format': '{{data.result}}'
-        },
-        'lr20xx_perr': {
-            'format': '{{data.result}}'
-        },
-        'lr20xx_ok': {
-            'format': '{{data.result}}'
-        },
-        'lr20xx_data': {
-            'format': '{{data.result}}'
-        },
-        'lr20xx_unknown': {
-            'format': '{{data.result}}'
-        },
-        'lr20xx_spi_error': {
-            'format': 'SPI ERROR: {{data.error}}'
-        },
+        'lr20xx_fail':      {'format': '{{data.result}}'},
+        'lr20xx_perr':      {'format': '{{data.result}}'},
+        'lr20xx_ok':        {'format': '{{data.result}}'},
+        'lr20xx_data':      {'format': '{{data.result}}'},
+        'lr20xx_unknown':   {'format': '{{data.result}}'},
+        'lr20xx_spi_error': {'format': 'SPI ERROR: {{data.error}}'},
     }
 
     # ── Internal state ──────────────────────────────────────────────────── #
@@ -331,7 +319,13 @@ class Hla(HighLevelAnalyzer):
         command_key = (self.mosi_bytes[0], self.mosi_bytes[1])
         status_byte_0 = self.miso_bytes[0] if self.miso_bytes else 0x00
         status_byte_1 = self.miso_bytes[1] if len(self.miso_bytes) > 1 else 0x00
-        
+
+        int_bytes = [0x00,  0x00, 0x00, 0x00]
+        int_bytes[0] = self.miso_bytes[2] if len(self.miso_bytes) > 2 else 0x00
+        int_bytes[1] = self.miso_bytes[3] if len(self.miso_bytes) > 3 else 0x00
+        int_bytes[2] = self.miso_bytes[4] if len(self.miso_bytes) > 4 else 0x00
+        int_bytes[3] = self.miso_bytes[5] if len(self.miso_bytes) > 5 else 0x00
+        int_bytes_number = len(self.miso_bytes) - 2 if len(self.miso_bytes) > 2 else 0
 
         command_status = status_byte_0 >> 1 & 3
         mode = status_byte_1 & 0x07
@@ -344,6 +338,9 @@ class Hla(HighLevelAnalyzer):
         mode_str = _lookup(MODE_TABLE, mode)
         reset_src_str = _lookup(RESET_SRC_TABLE, reset_src)
 
+        if command_str == 'RADIO_FIFO_READ_RX_OC':
+            int_bytes = [0x00, 0x00, 0x00, 0x00]
+
         result = f'CMD: {command_str}'
 
         if self.enable_status_info == 'Enable':
@@ -354,6 +351,9 @@ class Hla(HighLevelAnalyzer):
 
         if self.enable_int_stat == 'Enable' and interrupt:
             result += ' | INT'
+            if command_str != 'RADIO_FIFO_READ_RX_OC' and int_bytes_number != 0 and ('_SET_' in command_str or '_WRITE_' in command_str or '_CLEAR_' in command_str):
+                for i in range(4):
+                    result += f' {int_bytes[i]:02X}' if int_bytes_number > i else ' XX'
 
         if self.enable_reset_info == 'Enable' and reset_src_str != '':
             result += f' | RST: {reset_src_str}'
@@ -362,7 +362,5 @@ class Hla(HighLevelAnalyzer):
             frame_type,
             self.start_time,
             self.end_time,
-            {
-                'result': result
-            },
+            {'result': result},
         )
