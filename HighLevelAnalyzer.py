@@ -163,7 +163,7 @@ COMMAND_TABLE = {
         (0x01, 0x04): 'REGMEM_WRITE_REGMEM32_OC',
         (0x01, 0x05): 'REGMEM_WRITE_REGMEM32_MASK_OC',
         (0x01, 0x06): 'REGMEM_READ_REGMEM32_OC',
-        (0x00, 0x00): 'NONE (CMD Continue)',
+        (0x00, 0x00): 'READ CONTINUE',
 }
 
 # --------------------------------------------------------------------------- #
@@ -206,6 +206,16 @@ def _lookup(table, value):
         return table.get(value, f'UNKNOWN({fallback})')
     return table.get(value, f'UNKNOWN(0x{value:02X})')
 
+def _parse_value_ret_str(command, mosi_bytes, miso_bytes):
+    if command == 'RADIO_COMMON_SET_RF_FREQ_OC' and len(mosi_bytes) == 6:
+        # Extract the 4-byte frequency value from MOSI bytes 2-5.
+        freq_bytes = mosi_bytes[2:6]
+        freq_value = int.from_bytes(freq_bytes, byteorder='big')
+        return f'{freq_value} Hz'
+
+
+    return ''
+
 
 class Hla(HighLevelAnalyzer):
     """
@@ -221,8 +231,9 @@ class Hla(HighLevelAnalyzer):
     # Settings:
     enable_status_info = ChoicesSetting(label='Enable Status Info', choices=['Enable', 'Disable'])
     enable_mode_info = ChoicesSetting(label='Enable Mode Info', choices=['Enable', 'Disable'])
-    enable_int_stat = ChoicesSetting(label='Enable Interrupt Status', choices=['Disable', 'Enable'])
-    enable_reset_info = ChoicesSetting(label='Enable Reset Info', choices=['Disable', 'Enable'])
+    enable_int_stat = ChoicesSetting(label='Enable Interrupt Status', choices=['Enable', 'Disable'])
+    enable_reset_info = ChoicesSetting(label='Enable Reset Info', choices=['Enable', 'Disable'])
+    enable_value_parse = ChoicesSetting(label='Enable Value Parse (if supported)', choices=['Enable', 'Disable'])
 
     # ── Result frame types shown in the Logic 2 UI ──────────────────────── #
     # Each type gets its own colour in Logic 2.
@@ -338,9 +349,6 @@ class Hla(HighLevelAnalyzer):
         mode_str = _lookup(MODE_TABLE, mode)
         reset_src_str = _lookup(RESET_SRC_TABLE, reset_src)
 
-        if command_str == 'RADIO_FIFO_READ_RX_OC':
-            int_bytes = [0x00, 0x00, 0x00, 0x00]
-
         result = f'CMD: {command_str}'
 
         if self.enable_status_info == 'Enable':
@@ -357,6 +365,10 @@ class Hla(HighLevelAnalyzer):
 
         if self.enable_reset_info == 'Enable' and reset_src_str != '':
             result += f' | RST: {reset_src_str}'
+
+        if self.enable_value_parse == 'Enable':
+            value_str = _parse_value_ret_str(command_str, self.mosi_bytes, self.miso_bytes)
+            result += f' | VAL: {value_str}' if value_str != '' else ''
 
         return AnalyzerFrame(
             frame_type,
